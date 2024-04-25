@@ -33,29 +33,30 @@ def initialize_pipeline(
 
         scheduler, tokenizer, text_encoder, vae, unet = load_primary_models(model)
 
-    # Freeze any necessary models
-    freeze_models([vae, text_encoder, unet])
+    if lora_path != "":
+        # Freeze any necessary models
+        freeze_models([vae, text_encoder, unet])
 
-    # Enable xformers if available
-    handle_memory_attention(xformers, sdp, unet)
+        # Enable xformers if available
+        handle_memory_attention(xformers, sdp, unet)
 
-    lora_manager_temporal = LoraHandler(
-        version="cloneofsimo",
-        use_unet_lora=True,
-        use_text_lora=False,
-        save_for_webui=False,
-        only_for_webui=False,
-        unet_replace_modules=["TransformerTemporalModel"],
-        text_encoder_replace_modules=None,
-        lora_bias=None
-    )
+        lora_manager_temporal = LoraHandler(
+            version="cloneofsimo",
+            use_unet_lora=True,
+            use_text_lora=False,
+            save_for_webui=False,
+            only_for_webui=False,
+            unet_replace_modules=["TransformerTemporalModel"],
+            text_encoder_replace_modules=None,
+            lora_bias=None
+        )
 
-    unet_lora_params, unet_negation = lora_manager_temporal.add_lora_to_model(
-        True, unet, lora_manager_temporal.unet_replace_modules, 0, lora_path, r=lora_rank, scale=lora_scale)
+        unet_lora_params, unet_negation = lora_manager_temporal.add_lora_to_model(
+            True, unet, lora_manager_temporal.unet_replace_modules, 0, lora_path, r=lora_rank, scale=lora_scale)
 
-    unet.eval()
-    text_encoder.eval()
-    unet_and_text_g_c(unet, text_encoder, False, False)
+        unet.eval()
+        text_encoder.eval()
+        unet_and_text_g_c(unet, text_encoder, False, False)
 
     pipe = TextToVideoSDPipeline.from_pretrained(
         pretrained_model_name_or_path=model,
@@ -195,9 +196,10 @@ def inference(
             # save to mp4
             export_to_video(video_frames, f"{out_name}_{random_seed}.mp4", args.fps)
 
-            # # save to gif
-            # file_name = f"{out_name}_{random_seed}.gif"
-            # imageio.mimsave(file_name, video_frames, 'GIF', duration=1000 * 1 / args.fps, loop=0)
+            # save to gif (for no use lora)
+            if latents_path == "":
+                file_name = f"{out_name}_{random_seed}.gif"
+                imageio.mimsave(file_name, video_frames, 'GIF', duration=1000 * 1 / args.fps, loop=0)
 
     return video_frames
 
@@ -224,12 +226,15 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--device", type=str, default="cuda", help="Device to run inference on (defaults to cuda).")
     parser.add_argument("-x", "--xformers", action="store_true", help="Use XFormers attnetion, a memory-efficient attention implementation (requires `pip install xformers`).")
     parser.add_argument("-S", "--sdp", action="store_true", help="Use SDP attention, PyTorch's built-in memory-efficient attention implementation.")
-    parser.add_argument("-cf", "--checkpoint_folder", type=str, required=True, help="Path to Low Rank Adaptation checkpoint file (defaults to empty string, which uses no LoRA).")
+    # parser.add_argument("-cf", "--checkpoint_folder", type=str, required=True, help="Path to Low Rank Adaptation checkpoint file (defaults to empty string, which uses no LoRA).")
+    parser.add_argument("-cf", "--checkpoint_folder", type=str, default="", help="Path to Low Rank Adaptation checkpoint file (defaults to empty string, which uses no LoRA).")
     parser.add_argument("-lr", "--lora_rank", type=int, default=32, help="Size of the LoRA checkpoint's projection matrix (defaults to 32).")
     parser.add_argument("-ls", "--lora_scale", type=float, default=1.0, help="Scale of LoRAs.")
     parser.add_argument("-r", "--seed", type=int, default=None, help="Random seed to make generations reproducible.")
     parser.add_argument("-np", "--noise_prior", type=float, default=0., help="Scale of the influence of inversion noise.")
-    parser.add_argument("-ci", "--checkpoint_index", type=int, required=True,
+    # parser.add_argument("-ci", "--checkpoint_index", type=int, required=True,
+    #                     help="The index of checkpoint, such as 300.")
+    parser.add_argument("-ci", "--checkpoint_index", type=int,
                         help="The index of checkpoint, such as 300.")
     parser.add_argument("-rn", "--repeat_num", type=int, default=1,
                         help="How many results to generate with the same prompt.")
@@ -253,10 +258,16 @@ if __name__ == "__main__":
     # ============= sample videos =============
     # =========================================
 
-    lora_path = f"{args.checkpoint_folder}/checkpoint-{args.checkpoint_index}/temporal/lora"
-    latents_folder = f"{args.checkpoint_folder}/cached_latents"
-    latents_path = f"{latents_folder}/{random.choice(os.listdir(latents_folder))}"
-    assert os.path.exists(lora_path)
+    if args.checkpoint_folder != "":
+        lora_path = f"{args.checkpoint_folder}/checkpoint-{args.checkpoint_index}/temporal/lora"
+        latents_folder = f"{args.checkpoint_folder}/cached_latents"
+        latents_path = f"{latents_folder}/{random.choice(os.listdir(latents_folder))}"
+        print(f"[State] use temporal lora ; lora_path =", lora_path)
+        assert os.path.exists(lora_path)
+    else:
+        lora_path = args.checkpoint_folder
+        latents_path = ""
+        print(f"[State] not use temporal lora")
     video_frames = inference(
         model=args.model,
         prompt=args.prompt,
@@ -277,6 +288,8 @@ if __name__ == "__main__":
         noise_prior=args.noise_prior,
         repeat_num=args.repeat_num
     )
+    
+    
 
 
 

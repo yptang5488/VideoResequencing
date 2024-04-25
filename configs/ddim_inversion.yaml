@@ -1,0 +1,36 @@
+# General
+seed: 1
+device: "cuda:0"
+debug: True # For logging
+
+# Dir
+exp_name: "DogRun"
+video_name: "dog_run_motion_lowQ"
+output_dir: "ddim-inversion/${exp_name}"
+
+# Data
+data_dir: "test_data/motion"
+src_video_path: "${data_dir}/dog_run/${video_name}.mp4" #Override it with video_path
+image_size: [256, 384]
+save_video_frames: False
+
+# Frames
+frames_path: "frames/${video_name}"
+
+# Model
+model_name: "zeroscope_v2_576w"
+pretrained_model_path: "/home/cgvsl/P76111131/MotionDirector/models/zeroscope_v2_576w"
+enable_xformers_memory_efficient_attention: True
+use_fp16: True
+
+# Schedular
+beta_start: 0.0001
+beta_end: 0.02
+beta_schedule: "linear"
+
+# DDIM inversion
+n_steps: 500
+n_save_steps: 250
+n_frame_to_invert: 25 #16
+inversion_prompt: "a white dog is running forward in the yard"
+batch_size: 1  # TODO: batchsize is always 1 for inversion, we can remove this

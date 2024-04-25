@@ -31,6 +31,7 @@ def next_step(model_output: Union[torch.FloatTensor, np.ndarray], timestep: int,
               sample: Union[torch.FloatTensor, np.ndarray], ddim_scheduler):
     timestep, next_timestep = min(
         timestep - ddim_scheduler.config.num_train_timesteps // ddim_scheduler.num_inference_steps, 999), timestep
+    print('timestep, next_timestep :', timestep, next_timestep)
     alpha_prod_t = ddim_scheduler.alphas_cumprod[timestep] if timestep >= 0 else ddim_scheduler.final_alpha_cumprod
     alpha_prod_t_next = ddim_scheduler.alphas_cumprod[next_timestep]
     beta_prod_t = 1 - alpha_prod_t
@@ -51,8 +52,9 @@ def ddim_loop(pipeline, ddim_scheduler, latent, num_inv_steps, prompt):
     uncond_embeddings, cond_embeddings = context.chunk(2)
     all_latent = [latent]
     latent = latent.clone().detach()
+    print('ddim_loop : ddim_scheduler.timesteps =', ddim_scheduler.timesteps)
     for i in tqdm(range(num_inv_steps)):
-        t = ddim_scheduler.timesteps[len(ddim_scheduler.timesteps) - i - 1]
+        t = ddim_scheduler.timesteps[len(ddim_scheduler.timesteps) - i - 1] # t start from 1
         noise_pred = get_noise_pred_single(latent, t, cond_embeddings, pipeline.unet)
         latent = next_step(noise_pred, t, latent, ddim_scheduler)
         all_latent.append(latent)

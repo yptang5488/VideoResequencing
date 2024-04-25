@@ -44,6 +44,8 @@ import imageio
 import numpy as np
 
 
+
+
 already_printed_trainables = False
 
 logger = get_logger(__name__, log_level="INFO")
@@ -117,7 +119,7 @@ def create_output_folders(output_dir, config):
 
     os.makedirs(out_dir, exist_ok=True)
     os.makedirs(f"{out_dir}/samples", exist_ok=True)
-    # OmegaConf.save(config, os.path.join(out_dir, 'config.yaml'))
+    OmegaConf.save(config, os.path.join(out_dir, 'config.yaml'))
 
     return out_dir
 
@@ -286,9 +288,11 @@ def inverse_video(pipe, latents, num_steps):
     ddim_inv_scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
     ddim_inv_scheduler.set_timesteps(num_steps)
 
+    # only get t = last timestep
     ddim_inv_latent = ddim_inversion(
         pipe, ddim_inv_scheduler, video_latent=latents.to(pipe.device),
-        num_inv_steps=num_steps, prompt="")[-1]
+        num_inv_steps=num_steps, prompt="")[-1] # (1,4,16,32,48)
+    print('inverse_video, ddim_inv_latent.shape =', ddim_inv_latent.shape)
     return ddim_inv_latent
 
 
@@ -460,6 +464,7 @@ def save_pipe(
     # Copy the model without creating a reference to it. This allows keeping the state of our lora training if enabled.
     unet_out = copy.deepcopy(accelerator.unwrap_model(unet.cpu(), keep_fp32_wrapper=False))
     text_encoder_out = copy.deepcopy(accelerator.unwrap_model(text_encoder.cpu(), keep_fp32_wrapper=False))
+    print(f"[save_pipe] copied unet and text_encoder done")
 
     pipeline = TextToVideoSDPipeline.from_pretrained(
         path,
@@ -467,10 +472,13 @@ def save_pipe(
         text_encoder=text_encoder_out,
         vae=vae,
     ).to(torch_dtype=torch.float32)
+    print(f"[save_pipe] pipeline built done")
 
     lora_manager_spatial.save_lora_weights(model=copy.deepcopy(pipeline), save_path=save_path+'/spatial', step=global_step)
+    print(f"[save_pipe] save lora weights (lora_manager_spatial) built done")
     if lora_manager_temporal is not None:
         lora_manager_temporal.save_lora_weights(model=copy.deepcopy(pipeline), save_path=save_path+'/temporal', step=global_step)
+        print(f"[save_pipe] save lora weights (lora_manager_spatial) built done")
 
     if save_pretrained_model:
         pipeline.save_pretrained(save_path)
@@ -485,6 +493,60 @@ def save_pipe(
     del pipeline
     del unet_out
     del text_encoder_out
+    torch.cuda.empty_cache()
+    gc.collect()
+
+def save_pipe_without_copy(
+        path,
+        global_step,
+        accelerator,
+        unet,
+        text_encoder,
+        vae,
+        output_dir,
+        lora_manager_spatial: LoraHandler,
+        lora_manager_temporal: LoraHandler,
+        unet_target_replace_module=None,
+        text_target_replace_module=None,
+        is_checkpoint=False,
+        save_pretrained_model=True
+):
+    if is_checkpoint:
+        save_path = os.path.join(output_dir, f"checkpoint-{global_step}")
+        os.makedirs(save_path, exist_ok=True)
+    else:
+        save_path = output_dir
+
+    # Save the dtypes so we can continue training at the same precision.
+    u_dtype, t_dtype, v_dtype = unet.dtype, text_encoder.dtype, vae.dtype
+
+    pipeline = TextToVideoSDPipeline.from_pretrained(
+        path,
+        unet=accelerator.unwrap_model(unet.cpu(), keep_fp32_wrapper=False), # cpu?
+        text_encoder=accelerator.unwrap_model(text_encoder.cpu(), keep_fp32_wrapper=False), #cpu?
+        vae=vae,
+    ).to(torch_dtype=torch.float32)
+    print(f"[save_pipe] pipeline built done")
+
+    lora_manager_spatial.save_lora_weights(model=pipeline, save_path=save_path+'/spatial', step=global_step)
+    print(f"[save_pipe] save lora weights (lora_manager_spatial) built done")
+    if lora_manager_temporal is not None:
+        lora_manager_temporal.save_lora_weights(model=copy.deepcopy(pipeline), save_path=save_path+'/temporal', step=global_step)
+        print(f"[save_pipe] save lora weights (lora_manager_spatial) built done")
+
+    if save_pretrained_model:
+        pipeline.save_pretrained(save_path)
+
+    if is_checkpoint:
+        unet, text_encoder = accelerator.prepare(unet, text_encoder)
+        models_to_cast_back = [(unet, u_dtype), (text_encoder, t_dtype), (vae, v_dtype)]
+        [x[0].to(accelerator.device, dtype=x[1]) for x in models_to_cast_back]
+
+    logger.info(f"Saved model at {save_path} on step {global_step}")
+
+    del pipeline
+    # del unet_out
+    # del text_encoder_out
     torch.cuda.empty_cache()
     gc.collect()
 
@@ -539,6 +601,8 @@ def main(
         **kwargs
 ):
     *_, config = inspect.getargvalues(inspect.currentframe())
+    
+    output_dir = create_output_folders(output_dir, config)
 
     accelerator = Accelerator(
         gradient_accumulation_steps=gradient_accumulation_steps,
@@ -553,13 +617,13 @@ def main(
     # Initialize accelerate, transformers, and diffusers warnings
     accelerate_set_verbose(accelerator)
 
-    # Handle the output folder creation
-    if accelerator.is_main_process:
-        output_dir = create_output_folders(output_dir, config)
+    # # Handle the output folder creation
+    # if accelerator.is_main_process:
+    #     output_dir = create_output_folders(output_dir, config)
 
     # Load scheduler, tokenizer and models.
     noise_scheduler, tokenizer, text_encoder, vae, unet = load_primary_models(pretrained_model_path)
-
+    
     # Freeze any necessary models
     freeze_models([vae, text_encoder, unet])
 
@@ -944,7 +1008,7 @@ def main(
                 accelerator.log({"train_loss": train_loss_temporal}, step=global_step)
                 train_loss_temporal = 0.0
                 if global_step % checkpointing_steps == 0 and global_step > 0:
-                    save_pipe(
+                    save_pipe_without_copy(
                         pretrained_model_path,
                         global_step,
                         accelerator,
@@ -1023,7 +1087,7 @@ def main(
     # Create the pipeline using the trained modules and save it.
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
-        save_pipe(
+        save_pipe_without_copy(
             pretrained_model_path,
             global_step,
             accelerator,

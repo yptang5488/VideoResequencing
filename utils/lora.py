@@ -29,7 +29,7 @@ except ImportError:
 
     safetensors_available = False
 
-
+### Inherited from cloneofsimo's lora ###
 class LoraInjectedLinear(nn.Module):
     def __init__(
         self, in_features, out_features, bias=False, r=4, dropout_p=0.1, scale=1.0
@@ -73,7 +73,7 @@ class LoraInjectedLinear(nn.Module):
             self.lora_up.weight.device
         ).to(self.lora_up.weight.dtype)
 
-
+### Expand LoraInjectedLinear to apply to multiple quantities of lora ###
 class MultiLoraInjectedLinear(nn.Module):
     def __init__(
         self, in_features, out_features, bias=False, r=4, dropout_p=0.1, lora_num=1, scales=[1.0]
@@ -125,7 +125,7 @@ class MultiLoraInjectedLinear(nn.Module):
             self.lora_up.weight.device
         ).to(self.lora_up.weight.dtype)
 
-
+### Inherited from cloneofsimo's lora ###
 class LoraInjectedConv2d(nn.Module):
     def __init__(
         self,
@@ -211,6 +211,7 @@ class LoraInjectedConv2d(nn.Module):
             self.lora_up.weight.device
         ).to(self.lora_up.weight.dtype)
 
+### change conv, lora_up, lora_down and selector from Conv2d to Conv3d ###
 class LoraInjectedConv3d(nn.Module):
     def __init__(
         self,
