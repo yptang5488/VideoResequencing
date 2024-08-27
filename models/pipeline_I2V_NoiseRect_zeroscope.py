@@ -12,6 +12,7 @@ from PIL import Image
 import numpy as np
 from einops import rearrange
 from diffusers.pipelines.text_to_video_synthesis import TextToVideoSDPipelineOutput
+from diffusers.utils import randn_tensor
 
 def tensor2vid(video: torch.Tensor, mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]) -> List[np.ndarray]:
     # This code is copied from https://github.com/modelscope/modelscope/blob/1509fdb973e5871f37148a4b5e5964cafd43e64d/modelscope/pipelines/multi_modal/text_to_video_synthesis_pipeline.py#L78
@@ -49,18 +50,17 @@ class NoiseRectSDPipeline(TextToVideoSDPipeline):
         scheduler: KarrasDiffusionSchedulers,
     ):
         super().__init__(vae, text_encoder, tokenizer, unet, scheduler)
-    
-    
+
     # add input_image as parameter
     def prepare_latents(self, input_image, batch_size, num_channels_latents, video_length, height, width, dtype, device, generator, latents=None):
         shape = (batch_size, num_channels_latents, video_length, height // self.vae_scale_factor, width // self.vae_scale_factor)
-        
+
         if isinstance(generator, list) and len(generator) != batch_size:
             raise ValueError(
                 f"You have passed a list of generators of length {len(generator)}, but requested an effective batch"
                 f" size of {batch_size}. Make sure the batch size matches the length of the generators."
             )
-            
+
         if latents is None:
             latents = randn_tensor(shape, generator=generator, device=device, dtype=dtype)
         else:
@@ -83,7 +83,7 @@ class NoiseRectSDPipeline(TextToVideoSDPipeline):
             init_latents = self.vae.encode(input_image).latent_dist.sample(generator)
         
         init_latents = rearrange(init_latents, '(b f) c h w -> b c f h w', b = batch_size, f = 1) #[1,4,1,38,64]
-        
+
         ## defualt
         init_latents = init_latents.repeat((1, 1, video_length, 1, 1)) * 0.18215 #[1,4,16,38,64]
         noisy_latents = self.scheduler.add_noise(init_latents, noise, self.scheduler.timesteps[0])
