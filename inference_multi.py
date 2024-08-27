@@ -1,4 +1,3 @@
-# adapt for motiondirector(one or multi LoRAs), noise rectification and pnp feature injection
 import argparse
 import os
 import platform
@@ -22,7 +21,6 @@ import imageio
 
 from PIL import Image
 from models.pipeline_I2V_NoiseRect_zeroscope import NoiseRectSDPipeline
-from models.pipeline_injection import InjectionPipeline
 import inspect
 
 def initialize_pipeline(config):
@@ -80,31 +78,7 @@ def initialize_pipeline(config):
             vae=vae.to(device=device, dtype=torch.half),
             unet=unet.to(device=device, dtype=torch.half),
         )
-    elif config.enable_injection:
-        pipe = InjectionPipeline.from_pretrained(
-            pretrained_model_name_or_path=config.model_path,
-            scheduler=scheduler,
-            tokenizer=tokenizer,
-            text_encoder=text_encoder.to(device=device, dtype=torch.half),
-            vae=vae.to(device=device, dtype=torch.half),
-            unet=unet.to(device=device, dtype=torch.half),
-        )
-
-        ### injection operation
-        pipe.init_injection(config)
-    # TODO : use flag to control if use source latent as inital latent (and implement in injection pipeline)
-    else: 
-        # use original latent as initial latent
-        # pipe = InjectionPipeline.from_pretrained(
-        #     pretrained_model_name_or_path=config.model_path,
-        #     scheduler=scheduler,
-        #     tokenizer=tokenizer,
-        #     text_encoder=text_encoder.to(device=device, dtype=torch.half),
-        #     vae=vae.to(device=device, dtype=torch.half),
-        #     unet=unet.to(device=device, dtype=torch.half),
-        # )
-        
-        # zeroscope without modify
+    else:
         pipe = TextToVideoSDPipeline.from_pretrained(
             pretrained_model_name_or_path=config.model_path,
             scheduler=scheduler,
@@ -137,19 +111,18 @@ def inverse_video(pipe, latents, num_steps):
 
 
 def prepare_input_latents(
-    pipe: Union[TextToVideoSDPipeline
-                ,NoiseRectSDPipeline
-                ,InjectionPipeline],
+    pipe: Union[TextToVideoSDPipeline 
+                ,NoiseRectSDPipeline],
     batch_size: int,
     num_frames: int,
     height: int,
     width: int,
     latents_path:str,
-    noise_prior: float,
+    noise_prior: float
 ):
+    # initialize with random gaussian noise
     scale = pipe.vae_scale_factor
     shape = (batch_size, pipe.unet.config.in_channels, num_frames, height // scale, width // scale)
-
     if noise_prior > 0.:
         cached_latents = torch.load(latents_path)
         if 'inversion_noise' not in cached_latents:
@@ -162,9 +135,8 @@ def prepare_input_latents(
             latents = interpolate(rearrange(latents, "b c f h w -> (b f) c h w", b=batch_size), (height // scale, width // scale), mode='bilinear')
             latents = rearrange(latents, "(b f) c h w -> b c f h w", b=batch_size)
         noise = torch.randn_like(latents, dtype=torch.half)
-        # noiser_prior = alpha_prod_t in ddim inversion method
         latents = (noise_prior) ** 0.5 * latents + (1 - noise_prior) ** 0.5 * noise
-    else: # initialize with random gaussian noise
+    else:
         latents = torch.randn(shape, dtype=torch.half)
 
     return latents
@@ -189,22 +161,6 @@ def encode(pipe: Union[TextToVideoSDPipeline, NoiseRectSDPipeline]
 
     return latents
 
-## feature injection ##
-# TODO : noise rectification can use this function
-def get_src_images_latents(src_imgs_path):
-    assert os.path.exists(src_imgs_path)
-
-    filenames = [f for f in os.listdir(src_imgs_path) if os.path.isfile(f)]
-    src_frames = []
-    for f in filenames:
-        if f.split('.')[-1] == 'png' or f.split('.')[-1] == 'jpg':
-            src_frames.append(Image.open(os.path.join(src_imgs_path, f)))
-
-    print('numbers of src images =', len(src_frames))
-    assert isinstance(src_frames[0], Image.Image)
-
-    return src_frames
-    
 
 @torch.inference_mode()
 def inference(config):
@@ -214,7 +170,7 @@ def inference(config):
 
     with torch.autocast(config.device, dtype=torch.half):
         config.noise_rectification_flag = (config.input_image != None)
-        
+        # prepare models
         pipe, pipe_type = initialize_pipeline(config)
         
         for i in range(config.repeat_num):
@@ -235,6 +191,7 @@ def inference(config):
                 latents_path=config.latents_path,
                 noise_prior=config.noise_prior
             )
+            print('init_latents.shape =', init_latents.shape)
             
             with torch.no_grad():
                 if pipe_type == 'NoiseRectSDPipeline':
@@ -253,27 +210,7 @@ def inference(config):
                         noise_rectification_weight_start_omega=config.noise_rectification_weight_start_omega,
                         noise_rectification_weight_end_omega=config.noise_rectification_weight_end_omega,
                     ).frames
-                elif pipe_type == 'InjectionPipeline':
-                    # src_frames = get_src_images_latents(config.input_frames_path)
-                    video_frames = pipe(
-                        prompt=prompt,
-                        negative_prompt=negative_prompt,
-                        width=config.width,
-                        height=config.height,
-                        num_frames=config.num_frames,
-                        num_inference_steps=config.num_steps,
-                        guidance_scale=config.guidance_scale,
-                        latents=init_latents,
-                        src_frames_path=config.src_frames_path,
-                        src_noise_path=config.src_noise_path,
-                        exp_name=config.exp_name,
-                        video_name=config.video_name,
-                        enable_injection=config.enable_injection,
-                        mask_frames_path=config.mask_frames_path,
-                        guidance_img_path=config.guidance_img_path,
-                        enable_null_prompt=config.enable_null_prompt,
-                    ).frames
-                else: # for 'Text2VideoSDPipeline'
+                else:
                     video_frames = pipe(
                         prompt=prompt,
                         negative_prompt=negative_prompt,
@@ -288,11 +225,11 @@ def inference(config):
             # =========================================
             # ========= write outputs to file =========
             # =========================================
-            os.makedirs(config.output_dir, exist_ok=True)
+            os.makedirs(f"{config.output_dir}", exist_ok=True)
 
             # save to mp4
             export_to_video(video_frames, f"{config.out_name}_{random_seed}.mp4", config.fps)
-            # export_to_video(video_frames, f"{out_name}.mp4", config.fps)
+            # export_to_video(video_frames, f"{config.out_name}.mp4", config.fps)
 
             # # save to gif
             file_name = f"{config.out_name}_{random_seed}.gif"
@@ -317,14 +254,12 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     config = OmegaConf.load(args.config)
-    
     # fmt: on
 
     # =========================================
     # ====== validate and prepare inputs ======
     # =========================================
-    
-    # Overwrite config with command line arguments
+
     if args.output_dir != None:
         config.output_dir = args.output_dir
     if args.output_file_name != None:
@@ -335,15 +270,16 @@ if __name__ == "__main__":
         config.sdp = args.sdp 
 
     config.out_name = f"{config.output_dir}/"
-    prompt = re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", config.prompt) if platform.system() == "Windows" else config.prompt
+    # prompt = re.sub(r'[<>:"/\\|?*\x00-\x1F]', "_", config.prompt) if platform.system() == "Windows" else config.prompt
 
-    if config.output_file_name == "":
-        config.out_name += f"{prompt}".replace(' ','_').replace(',', '').replace('.', '')
+    if config.output_file_name != "":
+        config.out_name += f"{config.prompt}".replace(' ','_').replace(',', '').replace('.', '')
     else:
         config.out_name += f"{config.output_file_name}"
 
     config.prompt = [config.prompt] * config.batch_size
     config.negative_prompt = [config.negative_prompt] * config.batch_size
+
 
     if config.spatial_lora_path != "":
         print(f"[State] use spatial lora ; lora_path =", config.spatial_lora_path)
@@ -355,6 +291,7 @@ if __name__ == "__main__":
         assert os.path.exists(config.temporal_lora_path)
     else:
         print(f"[State] no use temporal lora")
+    
 
     if config.noise_prior > 0:
         # TODO : why random choice?
@@ -370,7 +307,7 @@ if __name__ == "__main__":
         assert os.path.exists(config.latents_path)
     else:
         config.latents_path = ""
-
+        
     ## do noise rectification ##
     if config.input_image_path != "":
         assert os.path.exists(config.input_image_path)
@@ -379,12 +316,11 @@ if __name__ == "__main__":
         print(config.input_image.format, config.input_image.size, config.input_image.mode)
         # config.height, config.width = 304, 512
         assert isinstance(config.input_image, Image.Image)
-
+        
         if config.noise_rectification_period == []:
             config.noise_rectification_period = torch.tensor([0, 0.6])
     else:
         config.input_image = None
-        
 
     # =========================================
     # ============= sample videos =============

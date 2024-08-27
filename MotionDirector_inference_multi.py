@@ -202,7 +202,7 @@ def inference(
     noise_rectification_weight_start_omega: float = 1.0,
     noise_rectification_weight_end_omega: float = 0.5,
 ):
-
+    print('inference prompt:',prompt)
     with torch.autocast(device, dtype=torch.half):
         noise_rectification_flag = (input_image != None)
         # prepare models
@@ -227,6 +227,7 @@ def inference(
                 latents_path=latents_path,
                 noise_prior=noise_prior
             )
+            print('init_latents.shape =', init_latents.shape)
             
             with torch.no_grad():
                 if pipe_type == 'NoiseRectSDPipeline':
@@ -246,6 +247,7 @@ def inference(
                         noise_rectification_weight_end_omega=noise_rectification_weight_end_omega,
                     ).frames
                 else:
+                    print('inference prompt before pipe:',prompt)
                     video_frames = pipe(
                         prompt=prompt,
                         negative_prompt=negative_prompt,
@@ -319,6 +321,7 @@ if __name__ == "__main__":
     parser.add_argument("-NR_eO", "--noise_rectification_weight_end_omega", type=float, default = 0.5, help="end scale value (if weight not be set)")
 
     args = parser.parse_args()
+    print(f"args: {args}")
     # fmt: on
 
     # =========================================
@@ -335,7 +338,8 @@ if __name__ == "__main__":
     args.prompt = [prompt] * args.batch_size
     if args.negative_prompt is not None:
         args.negative_prompt = [args.negative_prompt] * args.batch_size
-        
+
+
     if args.spatial_path_folder != None:
         print(f"[State] use spatial lora ; lora_path =", args.spatial_path_folder)
         assert os.path.exists(args.spatial_path_folder)

@@ -117,6 +117,7 @@ class InversionPipeline(nn.Module):
         self.text_encoder = CLIPTextModel.from_pretrained(model_path, subfolder="text_encoder", revision="fp16", torch_dtype=torch.float16).to(self.device)
         self.unet = UNet3DConditionModel.from_pretrained(model_path, subfolder="unet", revision="fp16", torch_dtype=torch.float16).to(self.device)
         
+        # get n_frame_to_invert frames
         self.paths, self.frames = self.load_video_frames(config.frames_path, config.n_frame_to_invert)
         
         self.latents = self.vae.encode(self.frames).latent_dist.sample().mul_(0.18215)
@@ -195,7 +196,7 @@ class InversionPipeline(nn.Module):
                 model_input = x_batch
                 # print("model_input.shape in ddim_inversion :", model_input.shape) #[1,4,16,32,48]
                 cond_batch = cond.repeat(x_batch.shape[0], 1, 1)
-                                                                    
+
                 alpha_prod_t = self.scheduler.alphas_cumprod[t]
                 alpha_prod_t_prev = (
                     self.scheduler.alphas_cumprod[timesteps[i - 1]]
@@ -210,6 +211,8 @@ class InversionPipeline(nn.Module):
                 eps = self.unet(model_input, t, encoder_hidden_states=cond_batch)["sample"]
                 pred_x0 = (x_batch - sigma_prev * eps) / mu_prev
                 latent_frames[b:b + batch_size] = mu * pred_x0 + sigma * eps
+                
+            # print(latent_frames.shape)
 
             if save_latents and t in timesteps_to_save:
                 torch.save(latent_frames, os.path.join(save_path, 'latents', f'noisy_latents_{t}.pt'))

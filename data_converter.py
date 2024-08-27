@@ -138,11 +138,12 @@ if __name__ == "__main__":
     else:
         if not os.path.exists(args.input_dir):
             raise ValueError(f'The directory "{args.input_dir}" does not exist.')
+        process_directory(args)
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    process_directory(args)
+        process_directory(args)
         
 '''usage
 python data_converter.py --input_dir=test_data/character/puppy --output_dir=test_data/character/puppy --output_format=jpg

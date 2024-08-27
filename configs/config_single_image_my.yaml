@@ -61,7 +61,7 @@ train_data:
   # 'single_video'
   image_dir: "./test_data/character/whiteLabrador"
 
-  # The prompt when using images
+  # The prompt when using a single image file
   single_img_prompt: "a sks Labrador on a black background"
 
 # Validation data parameters.
@@ -110,13 +110,13 @@ train_temporal_lora: False
 random_hflip_img: 0.5
 
 # Maximum number of train steps. Model is saved after training.
-max_train_steps: 1000
+max_train_steps: 300
 
 # Saves a model every nth step.
-checkpointing_steps: 50
+checkpointing_steps: 100
 
 # How many steps to do for validation if sample_preview is enabled.
-validation_steps: 50
+validation_steps: 100
 
 # Whether or not we want to use mixed precision with accelerate
 mixed_precision: "fp16"

@@ -1,0 +1,75 @@
+# General
+seed: 1455029
+device: "cuda"
+debug: True # For logging
+
+# model
+model_path: "/home/cgvsl/P76111131/MotionDirector/models/zeroscope_v2_576w" ## model to model_path
+
+# output dir
+# output_dir: "./outputs/inference/injection_Labrodor/sks_Labrodor"
+output_dir: "./outputs/inference/injection_Labrodor/sks_Labrodor"
+output_file_name: "v_running_f_0.8_spa_0.2"
+
+# inference
+prompt: "a sks Labrador is running in the yard"
+negative_prompt: "" #"text, watermark, copyright, blurry, nsfw, noise, quick motion, bad quality, flicker, dirty, ugly, fast motion, quick cuts, fast editing, cuts"
+batch_size: 1
+# image_size: [256, 384] [240, 512]
+height: 256
+width: 384
+num_frames: 16
+num_steps: 50
+guidance_scale: 12
+fps: 8
+
+# attention
+# TODO : store_true in args
+# xformers: false
+# sdp: false
+
+# lora
+spatial_lora_path: "/home/cgvsl/P76111131/MotionDirector/outputs/train/train_2024-05-13T16-14-41_sks_Labrador_SAMmask/checkpoint-100/spatial/lora"
+temporal_lora_path: "" #"/home/cgvsl/P76111131/MotionDirector/outputs/train/train_2024-04-21T22-00-11_dog_run_25/checkpoint-250/temporal/lora"
+lora_rank: 32             # Size of the LoRA checkpoint's projection matrix
+spatial_lora_scale: 0.8   # Scale of spatial LoRAs
+temporal_lora_scale: 1.0  # Scale of temporal LoRAs
+noise_prior: 0.           # Scale of the influence of inversion noise
+checkpoint_index: "default" # The index of temporal LoRA checkpoint
+repeat_num: 1             # How many results to generate with the same prompt
+
+# noise rectification
+input_image_path: "" #
+noise_rectification_period: []
+noise_rectification_weight: []
+noise_rectification_weight_start_omega: 1.0
+noise_rectification_weight_end_omega: 0.5
+
+# feature injection
+enable_injection: True
+src_frames_path: "/home/cgvsl/P76111131/MotionDirector/ddim-inversion/DogRun_higher_res/zeroscope_v2_576w/dog_run_2sec/steps_500/nframes_16/frames"
+src_noise_path: "/home/cgvsl/P76111131/MotionDirector/ddim-inversion/DogRun_higher_res/zeroscope_v2_576w/dog_run_2sec/steps_500/nframes_16/latents"
+video_name: "dog_run_2sec"
+exp_name: "DogRun_higher_res"
+pnp_f_t: 0.8
+pnp_attnS_t: 0.2 # spatial : < t1
+pnp_attnC_t: -1 # content : > t2
+pnp_attntmp_t: -1 # temporal : > t3
+
+# mask
+guidance_img_path: ""
+mask_frames_path: ""
+
+# one image mask
+# guidance_img_path: "/home/cgvsl/P76111131/MotionDirector/frames/dog_run_motion_lowQ/00000.png"
+# mask_frames_path: "/home/cgvsl/P76111131/MotionDirector/frames/00000_Mask.png"
+
+# every image mask
+# guidance_img_path: "/home/cgvsl/P76111131/MotionDirector/frames/dog_run_motion_lowQ"
+# mask_frames_path: "/home/cgvsl/P76111131/MotionDirector/mask/dog_run_motion_lowQ"
+
+# add a channel without prompt-guidance
+enable_null_prompt: True
+
+# DDIM inversion
+n_steps: 500 # TODO : difference with num_steps

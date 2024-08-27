@@ -1,5 +1,5 @@
 # Pretrained diffusers model path.
-pretrained_model_path: "/Users/rui/data/models/zeroscope_v2_576w/"
+pretrained_model_path: "/home/cgvsl/P76111131/MotionDirector/models/zeroscope_v2_576w"
 
 # The folder where your training outputs will be placed.
 output_dir: "./outputs/train"
@@ -55,7 +55,7 @@ train_data:
   n_sample_frames: 16
 
   # 'multiple videos'
-  path: "./test_data/bicycle-1/"
+  path: "./test_data/bicycle/"
 
   # The prompt when using a a single video file
   fallback_prompt: "A person is riding a bicycle."

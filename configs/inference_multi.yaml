@@ -1,0 +1,75 @@
+# General
+seed: 1455028
+device: "cuda"
+debug: True # For logging
+
+# model
+model_path: "/home/cgvsl/P76111131/MotionDirector/models/zeroscope_v2_576w" ## model to model_path
+
+# output dir
+output_dir: "./outputs/inference/injection/try"
+output_file_name: None
+
+# inference
+prompt: "A puppy is running towards the camera in a bright green grass background"
+negative_prompt: ""
+batch_size: 1
+# image_size: [256, 384]
+height: 240
+width: 512
+num_frames: 25
+num_steps: 30
+guidance_scale: 12
+fps: 8
+
+# attention
+# TODO : store_true in args
+# xformers: false
+# sdp: false
+
+# lora
+spatial_lora_path: "" # "/home/cgvsl/P76111131/MotionDirector/outputs/train/train_2024-04-22T12-36-44_puppy/checkpoint-950/spatial/lora"
+temporal_lora_path: "" # "/home/cgvsl/P76111131/MotionDirector/outputs/train/train_2024-04-21T22-00-11_dog_run_25/checkpoint-250/temporal/lora"
+lora_rank: 32             # Size of the LoRA checkpoint's projection matrix
+spatial_lora_scale: 1.0   # Scale of spatial LoRAs
+temporal_lora_scale: 1.0  # Scale of temporal LoRAs
+noise_prior: 0.           # Scale of the influence of inversion noise
+checkpoint_index: "default" # The index of temporal LoRA checkpoint
+repeat_num: 1             # How many results to generate with the same prompt
+
+# noise rectification
+input_image_path: "" #
+noise_rectification_period: []
+noise_rectification_weight: []
+noise_rectification_weight_start_omega: 1.0
+noise_rectification_weight_end_omega: 0.5
+
+# feature injection
+enable_injection: false
+pnp_attn_t: 0.5
+pnp_f_t: 0.8
+
+# DDIM inversion
+n_steps: 500 # TODO : difference with num_steps
+
+
+# args: Namespace(
+# , checkpoint_index='default'
+# , input_image_path=None
+# , negative_prompt=None
+# , noise_prior=0.3
+# , noise_rectification_period=None
+# , noise_rectification_weight=None
+# , noise_rectification_weight_end_omega=0.5
+# , noise_rectification_weight_start_omega=1.0
+# , num_steps=30
+# , output_dir='./outputs/inference/puppy/tmp'
+# , output_file_name=None
+# , prompt='A puppy is running towards the camera in a bright green grass background.'
+# , repeat_num=1
+# , sdp=False
+# , spatial_path_folder='/home/cgvsl/P76111131/MotionDirector/outputs/train/train_2024-04-22T12-36-44_puppy/checkpoint-950/spatial/lora'
+# , spatial_path_scale=1.0
+# , temporal_path_folder='/home/cgvsl/P76111131/MotionDirector/outputs/train/train_2024-04-21T22-00-11_dog_run_25/checkpoint-250/temporal/lora'
+# , temporal_path_scale=1.0
+# , xformers=False)
